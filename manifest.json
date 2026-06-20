@@ -1,0 +1,16 @@
+{
+  "name": "İşlik - İşletme Asistanı",
+  "short_name": "İşlik",
+  "description": "Küçük servis işletmeleri için müşteri, iş emri ve ödeme yönetimi.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f3",
+  "theme_color": "#111713",
+  "lang": "tr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

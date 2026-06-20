@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101613" />
+    <meta
+      name="description"
+      content="Küçük servis işletmeleri için müşteri, iş emri ve ödeme yönetimi."
+    />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>İşlik - İşletme Asistanı</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#dashboard" aria-label="İşlik ana sayfa">
+          <span class="brand-mark">İ</span>
+          <span>
+            <strong>işlik</strong>
+            <small>işletme asistanı</small>
+          </span>
+        </a>
+
+        <nav class="main-nav" aria-label="Ana menü">
+          <button class="nav-item active" data-view="dashboard">
+            <span class="nav-icon">⌂</span><span>Genel Bakış</span>
+          </button>
+          <button class="nav-item" data-view="jobs">
+            <span class="nav-icon">□</span><span>İşler</span>
+            <span class="nav-count" id="openJobCount">0</span>
+          </button>
+          <button class="nav-item" data-view="customers">
+            <span class="nav-icon">○</span><span>Müşteriler</span>
+          </button>
+          <button class="nav-item" data-view="calendar">
+            <span class="nav-icon">▦</span><span>Takvim</span>
+          </button>
+          <button class="nav-item" data-view="finance">
+            <span class="nav-icon">₺</span><span>Finans</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="pro-card">
+          <span class="pro-kicker">İŞLİK PRO</span>
+          <strong>İşlerin akışta kalsın.</strong>
+          <p>Otomatik hatırlatma ve WhatsApp entegrasyonu yakında.</p>
+          <button class="text-button" id="proInfoButton">Detayları gör <span>→</span></button>
+        </div>
+
+        <button class="profile-card" id="profileButton">
+          <span class="avatar" id="profileAvatar">İŞ</span>
+          <span><strong id="profileBusiness">İşletmem</strong><small id="profileRole">Yönetici hesabı</small></span>
+          <span class="more">•••</span>
+        </button>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu" aria-label="Menüyü aç">☰</button>
+          <div class="topbar-copy">
+            <p id="todayLabel"></p>
+            <h1 id="pageTitle">Günaydın, Nurettin.</h1>
+          </div>
+          <div class="topbar-actions">
+            <label class="search-box">
+              <span>⌕</span>
+              <input id="globalSearch" type="search" placeholder="Müşteri veya iş ara" />
+              <kbd>⌘ K</kbd>
+            </label>
+            <button class="icon-button" id="notificationButton" aria-label="Bildirimler">
+              <span>♢</span><i></i>
+            </button>
+            <button class="primary-button" id="newJobButton"><span>＋</span> Yeni iş</button>
+          </div>
+        </header>
+
+        <section class="page" id="pageContent" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Mobil menü">
+      <button class="active" data-view="dashboard"><span>⌂</span>Özet</button>
+      <button data-view="jobs"><span>□</span>İşler</button>
+      <button class="mobile-add" id="mobileNewJob" aria-label="Yeni iş">＋</button>
+      <button data-view="customers"><span>○</span>Müşteri</button>
+      <button data-view="finance"><span>₺</span>Finans</button>
+    </nav>
+
+    <div class="modal-backdrop" id="jobModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="jobModalTitle">
+        <div class="modal-header">
+          <div><span class="eyebrow">YENİ KAYIT</span><h2 id="jobModalTitle">Yeni iş oluştur</h2></div>
+          <button class="close-button" data-close-modal aria-label="Kapat">×</button>
+        </div>
+        <form id="jobForm">
+          <div class="form-grid">
+            <label class="field full"><span>İş başlığı</span><input name="title" required placeholder="Örn. Kombi su basıncı arızası" /></label>
+            <label class="field"><span>Müşteri adı</span><input name="customer" required placeholder="Ad soyad" /></label>
+            <label class="field"><span>Telefon</span><input name="phone" type="tel" placeholder="05xx xxx xx xx" /></label>
+            <label class="field"><span>Tarih</span><input name="date" type="date" required /></label>
+            <label class="field"><span>Saat</span><input name="time" type="time" required /></label>
+            <label class="field"><span>İş türü</span><select name="category"><option>Teknik servis</option><option>Bakım</option><option>Montaj</option><option>Keşif</option><option>Diğer</option></select></label>
+            <label class="field"><span>Tahmini tutar</span><div class="input-affix"><input name="amount" type="number" min="0" placeholder="0" /><b>₺</b></div></label>
+            <label class="field full"><span>Not</span><textarea name="note" rows="3" placeholder="Sorunun kısa açıklaması, adres veya özel not..."></textarea></label>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="secondary-button" data-close-modal>Vazgeç</button>
+            <button type="submit" class="primary-button">İşi oluştur</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="detailModal" hidden>
+      <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+        <div class="modal-header">
+          <div><span class="eyebrow">İŞ DETAYI</span><h2 id="detailModalTitle">İş kaydı</h2></div>
+          <button class="close-button" data-close-detail aria-label="Kapat">×</button>
+        </div>
+        <div id="detailContent"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop onboarding-backdrop" id="onboardingModal" hidden>
+      <section class="modal onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+        <div class="onboarding-brand"><span class="brand-mark">İ</span><strong>işlik</strong></div>
+        <span class="eyebrow">3 DAKİKADA HAZIR</span>
+        <h2 id="onboardingTitle">İşletmeni kuralım.</h2>
+        <p class="onboarding-copy">Bilgilerini bir kez gir; panel, raporlar ve yedekler sana özel çalışsın.</p>
+        <form id="onboardingForm">
+          <div class="form-grid">
+            <label class="field"><span>Adın</span><input name="ownerName" required autocomplete="name" placeholder="Örn. Nurettin" /></label>
+            <label class="field"><span>İşletme adı</span><input name="businessName" required autocomplete="organization" placeholder="Örn. Nova Teknik" /></label>
+            <label class="field"><span>Telefon</span><input name="phone" type="tel" autocomplete="tel" placeholder="05xx xxx xx xx" /></label>
+            <label class="field"><span>Faaliyet alanı</span><select name="industry"><option>Teknik servis</option><option>Oto servis</option><option>Güzellik salonu</option><option>Tesisat ve bakım</option><option>Diğer</option></select></label>
+            <label class="check-field full"><input name="keepDemo" type="checkbox" checked /><span><strong>Örnek kayıtlarla başla</strong><small>Uygulamayı tanımak için birkaç demo iş bırakır.</small></span></label>
+          </div>
+          <button type="submit" class="primary-button onboarding-submit">İşletmemi oluştur <span>→</span></button>
+        </form>
+        <small class="privacy-note">Verilerin bu cihazda saklanır. Ayarlardan istediğin zaman yedekleyebilirsin.</small>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="settingsModal" hidden>
+      <section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="modal-header">
+          <div><span class="eyebrow">İŞLETME AYARLARI</span><h2 id="settingsTitle">Profil ve veriler</h2></div>
+          <button class="close-button" data-close-settings aria-label="Kapat">×</button>
+        </div>
+        <form id="settingsForm">
+          <div class="settings-section">
+            <h3>İşletme profili</h3>
+            <div class="form-grid">
+              <label class="field"><span>Adın</span><input name="ownerName" required /></label>
+              <label class="field"><span>İşletme adı</span><input name="businessName" required /></label>
+              <label class="field"><span>Telefon</span><input name="phone" type="tel" /></label>
+              <label class="field"><span>Faaliyet alanı</span><select name="industry"><option>Teknik servis</option><option>Oto servis</option><option>Güzellik salonu</option><option>Tesisat ve bakım</option><option>Diğer</option></select></label>
+            </div>
+            <button type="submit" class="primary-button">Bilgileri kaydet</button>
+          </div>
+        </form>
+        <div class="settings-section">
+          <h3>Veri yönetimi</h3>
+          <p>İşlerini ve profilini tek dosyada yedekle veya daha önce aldığın yedeği geri yükle.</p>
+          <div class="settings-actions">
+            <button class="secondary-button" id="backupButton">Yedeği indir</button>
+            <button class="secondary-button" id="restoreButton">Yedekten dön</button>
+            <input id="restoreInput" type="file" accept="application/json,.json" hidden />
+          </div>
+        </div>
+        <div class="settings-section install-section">
+          <div><h3>Telefona veya bilgisayara yükle</h3><p id="installStatus">Uygulama desteklenen bir tarayıcıda açıldığında yüklenebilir.</p></div>
+          <button class="primary-button" id="installButton" disabled>Uygulamayı yükle</button>
+        </div>
+        <div class="settings-section danger-section">
+          <div><h3>Verileri sıfırla</h3><p>Tüm iş kayıtlarını siler ve boş bir hesapla devam eder.</p></div>
+          <button class="danger-button" id="resetDataButton">Tüm işleri sil</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="command-panel" id="commandPanel" hidden>
+      <div class="command-search"><span>⌕</span><input id="commandInput" placeholder="Ara: müşteri, iş veya tutar..." /></div>
+      <div class="command-results" id="commandResults"></div>
+    </div>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
