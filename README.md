@@ -2,6 +2,10 @@
 
 Kucuk servis isletmeleri icin yerel calisan is, musteri, takvim ve finans uygulamasi.
 
+## Canli Uygulama
+
+https://nurettin-erdogan.github.io/islik/
+
 ## Ozellikler
 
 - Is olusturma, duzenleme, durum degistirme ve silme
