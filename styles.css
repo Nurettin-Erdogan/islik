@@ -30,6 +30,10 @@ body {
 }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(110, 139, 31, .45);
+  outline-offset: 3px;
+}
 [hidden] { display: none !important; }
 
 .app-shell { display: flex; min-height: 100vh; }
@@ -401,4 +405,13 @@ button { cursor: pointer; }
   .calendar-date { min-height: 48px; padding: 5px; }
   .toast-region { right: 12px; bottom: 80px; left: 12px; }
   .toast { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

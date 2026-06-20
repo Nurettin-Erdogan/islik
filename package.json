@@ -1,10 +1,13 @@
 {
   "name": "islik",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.10"
+  },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node tests/smoke.mjs"
+    "test": "node --experimental-websocket tests/smoke.mjs"
   }
 }

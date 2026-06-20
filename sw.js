@@ -1,4 +1,4 @@
-const CACHE_NAME = 'islik-cache-v7';
+const CACHE_NAME = 'islik-cache-v8';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.json', './assets/logo.svg'];
 
 self.addEventListener('install', event => {
@@ -13,11 +13,16 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-    if (response.ok && new URL(event.request.url).origin === self.location.origin) {
+  if (new URL(event.request.url).origin !== self.location.origin) return;
+  event.respondWith(fetch(event.request).then(response => {
+    if (response.ok) {
       const copy = response.clone();
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
     }
     return response;
-  }).catch(() => event.request.mode === 'navigate' ? caches.match('./index.html') : Response.error())));
+  }).catch(async () => {
+    const cached = await caches.match(event.request);
+    if (cached) return cached;
+    return event.request.mode === 'navigate' ? caches.match('./index.html') : Response.error();
+  }));
 });

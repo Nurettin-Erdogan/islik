@@ -3,6 +3,8 @@ name: Deploy Islik to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +17,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify static files
+        shell: bash
+        run: |
+          node --check app.js
+          node --check sw.js
+          node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+          test -f index.html
+          test -f styles.css
+          test -f assets/logo.svg
+
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run browser smoke test
+        run: npm test
+
   deploy:
+    if: github.event_name != 'pull_request'
+    needs: [verify, smoke]
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -1,5 +1,7 @@
 const STORAGE_KEY = 'islik-v1';
 const APP_VERSION = 2;
+const VALID_JOB_STATUSES = new Set(['waiting', 'progress', 'done', 'cancelled']);
+const MAX_BACKUP_SIZE = 5 * 1024 * 1024;
 
 const seedJobs = [
   { id: 101, title: 'Kombi su basıncı arızası', customer: 'Ahmet Yılmaz', phone: '0532 410 24 18', date: todayISO(), time: '09:30', category: 'Teknik servis', amount: 1850, status: 'progress', note: 'Basınç sürekli düşüyor. Genleşme tankı ve tesisat kaçağı kontrol edilecek.' },
@@ -16,6 +18,7 @@ let currentView = 'dashboard';
 let deferredInstallPrompt = null;
 let editingJobId = null;
 let jobViewFilter = 'all';
+let calendarOffset = 0;
 
 const pageContent = document.querySelector('#pageContent');
 const pageTitle = document.querySelector('#pageTitle');
@@ -39,20 +42,79 @@ function offsetISO(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function cleanText(value, maxLength = 200) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function isValidDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function normalizeJobs(jobs, { strict = false } = {}) {
+  if (!Array.isArray(jobs)) throw new Error('İş listesi bulunamadı.');
+  const seenIds = new Set();
+  const normalized = jobs.map((job, index) => {
+    if (!job || typeof job !== 'object') return null;
+    const title = cleanText(job.title, 120);
+    const customer = cleanText(job.customer, 100);
+    const date = cleanText(job.date, 10);
+    const time = cleanText(job.time, 5);
+    if (!title || !customer || !isValidDate(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
+
+    const rawId = Number(job.id);
+    let id = Number.isSafeInteger(rawId) && rawId > 0 ? rawId : Date.now() + index;
+    if (seenIds.has(id)) {
+      if (strict) return null;
+      id = Date.now() + index;
+    }
+    seenIds.add(id);
+
+    const rawAmount = Number(job.amount);
+    return {
+      id,
+      title,
+      customer,
+      phone: cleanText(job.phone, 30),
+      date,
+      time,
+      category: cleanText(job.category, 60) || 'Diğer',
+      amount: Number.isFinite(rawAmount) && rawAmount >= 0 ? Math.min(rawAmount, 1_000_000_000) : 0,
+      status: VALID_JOB_STATUSES.has(job.status) ? job.status : 'waiting',
+      note: cleanText(job.note, 1000)
+    };
+  }).filter(Boolean);
+
+  if (strict && normalized.length !== jobs.length) throw new Error('Geçersiz iş kaydı.');
+  return normalized;
+}
+
+function normalizeProfile(profile = {}) {
+  return {
+    ownerName: cleanText(profile.ownerName, 80),
+    businessName: cleanText(profile.businessName, 120),
+    phone: cleanText(profile.phone, 30),
+    industry: cleanText(profile.industry, 60) || 'Diğer'
+  };
+}
+
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved && Array.isArray(saved.jobs)) {
+      const profile = normalizeProfile({
+        ...saved.profile,
+        ownerName: saved.profile?.ownerName || 'Nurettin',
+        businessName: saved.profile?.businessName || saved.business || 'Nova Teknik',
+        industry: saved.profile?.industry || 'Teknik servis'
+      });
       return {
         version: APP_VERSION,
-        jobs: saved.jobs,
+        jobs: normalizeJobs(saved.jobs),
         setupComplete: Boolean(saved.setupComplete),
-        profile: {
-          ownerName: saved.profile?.ownerName || 'Nurettin',
-          businessName: saved.profile?.businessName || saved.business || 'Nova Teknik',
-          phone: saved.profile?.phone || '',
-          industry: saved.profile?.industry || 'Teknik servis'
-        }
+        profile
       };
     }
   } catch (error) {
@@ -134,7 +196,7 @@ function statusLabel(status) {
 }
 
 function initials(name) {
-  return name.split(' ').slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  return cleanText(name, 100).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'İŞ';
 }
 
 function escapeHTML(value = '') {
@@ -174,7 +236,12 @@ function updateProfileUI() {
 
 function setView(view) {
   currentView = view;
-  document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  document.querySelectorAll('[data-view]').forEach(button => {
+    const active = button.dataset.view === view;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
   updateHeader();
   render();
   sidebar.classList.remove('open');
@@ -220,10 +287,10 @@ function renderDashboard() {
 
       <aside class="right-column">
         <section class="ai-card">
-          <div class="ai-head"><span class="ai-orb">ai</span><div><strong>İşlik Asistan</strong><small>Talebi yaz, gerisini birlikte hazırlayalım</small></div></div>
-          <h3>Müşteri mesajını hızlıca iş kaydına dönüştür.</h3>
+          <div class="ai-head"><span class="ai-orb">＋</span><div><strong>Hızlı kayıt</strong><small>Talep metninden iş taslağı hazırla</small></div></div>
+          <h3>Müşteri mesajını düzenli bir iş kaydına dönüştür.</h3>
           <p>Örneğin: “Ayşe Hanım yarın 14:00, kombi bakım, 1.200 TL” yazabilirsin.</p>
-          <form class="ai-input" id="assistantForm"><input id="assistantInput" placeholder="Müşteri talebini buraya yaz..." autocomplete="off" /><button aria-label="Gönder">→</button></form>
+          <form class="ai-input" id="assistantForm"><input id="assistantInput" aria-label="Müşteri talebi" placeholder="Müşteri talebini buraya yaz..." autocomplete="off" /><button aria-label="Gönder">→</button></form>
           <div class="quick-prompts"><button data-prompt="Yarın için bakım işi oluştur">Bakım işi</button><button data-prompt="Bekleyen ödemeleri göster">Ödemeler</button><button data-prompt="Bugünkü programı özetle">Gün özeti</button></div>
         </section>
 
@@ -284,6 +351,8 @@ function renderCustomers() {
 
 function renderCalendar() {
   const now = new Date();
+  now.setDate(1);
+  now.setMonth(now.getMonth() + calendarOffset);
   const year = now.getFullYear();
   const month = now.getMonth();
   const first = new Date(year, month, 1);
@@ -294,12 +363,12 @@ function renderCalendar() {
   for (let i = startDay - 1; i >= 0; i--) cells.push({ day: prevDays - i, other: true, date: '' });
   for (let day = 1; day <= daysInMonth; day++) {
     const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    cells.push({ day, date, today: date === todayISO(), hasJob: state.jobs.some(job => job.date === date) });
+    cells.push({ day, date, today: date === todayISO(), hasJob: state.jobs.some(job => job.date === date && job.status !== 'cancelled') });
   }
   while (cells.length % 7) cells.push({ day: cells.length - daysInMonth - startDay + 1, other: true, date: '' });
   const upcoming = state.jobs.filter(job => job.date >= todayISO() && job.status !== 'cancelled').sort((a,b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)).slice(0,5);
   const monthName = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(now);
-  return `<div class="section-toolbar"><h2>Takvim</h2><button class="primary-button" data-new-job>＋ Randevu ekle</button></div><div class="calendar-layout"><section class="panel month-card"><div class="month-head"><h3>${monthName}</h3><div class="toolbar-group"><button class="filter-button">‹</button><button class="filter-button">Bugün</button><button class="filter-button">›</button></div></div><div class="calendar-grid">${['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'].map(d => `<span>${d}</span>`).join('')}${cells.map(cell => `<div class="calendar-date ${cell.other ? 'other' : ''} ${cell.today ? 'today' : ''}">${cell.day}${cell.hasJob ? '<i class="calendar-dot"></i>' : ''}</div>`).join('')}</div></section><section class="panel agenda-panel"><div class="panel-header"><div class="panel-title"><h2>Yaklaşan işler</h2><p>Sıradaki 5 randevu</p></div></div>${upcoming.length ? upcoming.map(job => `<article class="agenda-item" data-job-id="${job.id}"><i class="agenda-line"></i><div><strong>${escapeHTML(job.title)}</strong><small>${shortDate(job.date)} · ${job.time} · ${escapeHTML(job.customer)}</small></div></article>`).join('') : emptyState('Yaklaşan iş yok.', 'Yeni randevu eklediğinde burada görünür.')}</section></div>`;
+  return `<div class="section-toolbar"><h2>Takvim</h2><button class="primary-button" data-new-job>＋ Randevu ekle</button></div><div class="calendar-layout"><section class="panel month-card"><div class="month-head"><h3>${monthName}</h3><div class="toolbar-group"><button class="filter-button" data-calendar-shift="-1" aria-label="Önceki ay">‹</button><button class="filter-button" data-calendar-shift="0">Bugün</button><button class="filter-button" data-calendar-shift="1" aria-label="Sonraki ay">›</button></div></div><div class="calendar-grid">${['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'].map(d => `<span>${d}</span>`).join('')}${cells.map(cell => `<div class="calendar-date ${cell.other ? 'other' : ''} ${cell.today ? 'today' : ''}">${cell.day}${cell.hasJob ? '<i class="calendar-dot"></i>' : ''}</div>`).join('')}</div></section><section class="panel agenda-panel"><div class="panel-header"><div class="panel-title"><h2>Yaklaşan işler</h2><p>Sıradaki 5 randevu</p></div></div>${upcoming.length ? upcoming.map(job => `<article class="agenda-item" data-job-id="${job.id}"><i class="agenda-line"></i><div><strong>${escapeHTML(job.title)}</strong><small>${shortDate(job.date)} · ${job.time} · ${escapeHTML(job.customer)}</small></div></article>`).join('') : emptyState('Yaklaşan iş yok.', 'Yeni randevu eklediğinde burada görünür.')}</section></div>`;
 }
 
 function renderFinance() {
@@ -362,6 +431,11 @@ function bindViewActions() {
   pageContent.querySelectorAll('[data-go]').forEach(button => button.addEventListener('click', () => setView(button.dataset.go)));
   pageContent.querySelectorAll('[data-job-filter]').forEach(button => button.addEventListener('click', () => {
     jobViewFilter = button.dataset.jobFilter;
+    render();
+  }));
+  pageContent.querySelectorAll('[data-calendar-shift]').forEach(button => button.addEventListener('click', () => {
+    const shift = Number(button.dataset.calendarShift);
+    calendarOffset = shift === 0 ? 0 : calendarOffset + shift;
     render();
   }));
   pageContent.querySelectorAll('[data-prompt]').forEach(button => button.addEventListener('click', () => {
@@ -532,7 +606,8 @@ function handleAssistant(event) {
 
 function showToast(message) {
   const region = document.querySelector('#toastRegion');
-  while (region.children.length >= 3) region.firstElementChild.remove();
+  const limit = window.matchMedia('(max-width: 620px)').matches ? 1 : 3;
+  while (region.children.length >= limit) region.firstElementChild.remove();
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.setAttribute('role', 'status');
@@ -560,9 +635,15 @@ function renderCommandResults(query) {
   }));
 }
 
+function escapeCSVCell(value) {
+  const text = String(value ?? '');
+  const safe = /^[=+\-@]/.test(text.trimStart()) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
 function exportFinance() {
   const rows = [['Müşteri','İş','Tarih','Durum','Tutar'], ...state.jobs.map(job => [job.customer, job.title, job.date, statusLabel(job.status), job.amount])];
-  const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"','""')}"`).join(';')).join('\n');
+  const csv = rows.map(row => row.map(escapeCSVCell).join(';')).join('\n');
   const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -654,21 +735,19 @@ function downloadFile(filename, content, type) {
 
 async function restoreBackup(file) {
   try {
+    if (!file || file.size > MAX_BACKUP_SIZE) throw new Error('Yedek dosyası çok büyük.');
     const parsed = JSON.parse(await file.text());
     const restored = parsed.data || parsed;
     if (!restored || !Array.isArray(restored.jobs) || !restored.profile?.businessName) {
       throw new Error('Geçersiz İşlik yedeği');
     }
+    const profile = normalizeProfile(restored.profile);
+    if (!profile.businessName) throw new Error('İşletme adı bulunamadı.');
     replaceState({
       version: APP_VERSION,
-      jobs: restored.jobs,
+      jobs: normalizeJobs(restored.jobs, { strict: true }),
       setupComplete: true,
-      profile: {
-        ownerName: restored.profile.ownerName || '',
-        businessName: restored.profile.businessName,
-        phone: restored.profile.phone || '',
-        industry: restored.profile.industry || 'Diğer'
-      }
+      profile
     });
     closeSettings();
     updateHeader();
@@ -779,8 +858,7 @@ document.addEventListener('click', event => {
 
 const hashView = window.location.hash.replace('#', '');
 if (['dashboard','jobs','customers','calendar','finance'].includes(hashView)) currentView = hashView;
-updateHeader();
-render();
+setView(currentView);
 if (!state.setupComplete) openOnboarding();
 
 if ('serviceWorker' in navigator) {

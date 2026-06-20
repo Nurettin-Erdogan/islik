@@ -2,10 +2,32 @@ import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const PORT = 9337;
+const APP_URL = process.env.ISLIK_URL || 'http://127.0.0.1:4173/?smoke=1';
+const APP_ORIGIN = new URL(APP_URL).origin;
 const profile = join(tmpdir(), `islik-smoke-${Date.now()}`);
+const server = process.env.ISLIK_URL ? null : spawn(process.execPath, [fileURLToPath(new URL('../server.mjs', import.meta.url))], {
+  windowsHide: true,
+  stdio: 'ignore'
+});
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function waitForApp() {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      if ((await fetch(APP_URL)).ok) return;
+    } catch {}
+    await sleep(250);
+  }
+  throw new Error(`Test adresine ulaşılamadı: ${APP_URL}`);
+}
+
+await waitForApp();
+
 const edge = spawn(EDGE, [
   '--headless',
   '--disable-gpu',
@@ -17,17 +39,18 @@ const edge = spawn(EDGE, [
   `--remote-debugging-port=${PORT}`,
   `--user-data-dir=${profile}`,
   '--window-size=1440,1000',
-  'http://127.0.0.1:4173/?smoke=1'
+  APP_URL
 ], { windowsHide: true, stdio: 'ignore' });
-process.on('exit', () => edge.kill());
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+process.on('exit', () => {
+  edge.kill();
+  server?.kill();
+});
 
 async function waitForTarget() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       const targets = await fetch(`http://127.0.0.1:${PORT}/json`).then(response => response.json());
-      const target = targets.find(item => item.type === 'page' && item.url.includes('127.0.0.1:4173'));
+      const target = targets.find(item => item.type === 'page' && item.url.startsWith(APP_ORIGIN));
       if (target) return target;
     } catch {}
     await sleep(250);
@@ -74,6 +97,7 @@ const cdp = createClient(target.webSocketDebuggerUrl);
 await cdp.ready;
 await cdp.send('Runtime.enable');
 await cdp.send('Page.enable');
+await cdp.send('Network.enable');
 await sleep(1200);
 
 async function evaluate(expression) {
@@ -85,10 +109,16 @@ async function evaluate(expression) {
 const initial = await evaluate(`({
   title: document.title,
   dashboard: Boolean(document.querySelector('.dashboard-grid')),
+  duplicateIds: [...document.querySelectorAll('[id]')].map(element => element.id).filter((id, index, ids) => ids.indexOf(id) !== index),
+  unnamedButtons: [...document.querySelectorAll('button')].filter(button => !(button.textContent.trim() || button.getAttribute('aria-label'))).length,
+  unlabeledFields: [...document.querySelectorAll('input:not([type="hidden"]):not([hidden]), select, textarea')].filter(field => !field.closest('label') && !field.getAttribute('aria-label')).length,
   errors: window.__smokeErrors || []
 })`);
 assert(initial.title === 'İşlik - İşletme Asistanı', 'Sayfa başlığı beklenen değerde değil.');
 assert(initial.dashboard, 'Genel bakış ekranı oluşturulamadı.');
+assert(initial.duplicateIds.length === 0, `Tekrarlanan HTML kimliği var: ${initial.duplicateIds.join(', ')}`);
+assert(initial.unnamedButtons === 0, 'Erişilebilir adı olmayan düğme var.');
+assert(initial.unlabeledFields === 0, 'Etiketi olmayan form alanı var.');
 
 const setup = await evaluate(`(() => {
   const modal = document.querySelector('#onboardingModal');
@@ -148,6 +178,19 @@ await evaluate(`(() => {
 const updatedStatus = await evaluate(`JSON.parse(localStorage.getItem('islik-v1')).jobs.find(job => job.title === 'Test cihaz kurulumu').status`);
 assert(updatedStatus === 'progress', 'İş durumu güncellenemedi.');
 
+const calendarFlow = await evaluate(`(() => {
+  document.querySelector('.main-nav [data-view="calendar"]').click();
+  const before = document.querySelector('.month-head h3').textContent;
+  document.querySelector('[data-calendar-shift="1"]').click();
+  const after = document.querySelector('.month-head h3').textContent;
+  document.querySelector('[data-calendar-shift="0"]').click();
+  const reset = document.querySelector('.month-head h3').textContent;
+  document.querySelector('.main-nav [data-view="dashboard"]').click();
+  return { before, after, reset };
+})()`);
+assert(calendarFlow.before !== calendarFlow.after, 'Takvim sonraki aya geçmedi.');
+assert(calendarFlow.before === calendarFlow.reset, 'Takvim bugüne dönemedi.');
+
 const extendedFlows = await evaluate(`(() => {
   document.querySelector('.main-nav [data-view="jobs"]').click();
   let card = [...document.querySelectorAll('.job-card')].find(item => item.textContent.includes('Test cihaz kurulumu'));
@@ -200,8 +243,27 @@ assert(extendedFlows.cancelled === 'cancelled' && extendedFlows.cancelledVisible
 assert(extendedFlows.todayFilterActive, 'Bugün filtresi etkinleşmedi.');
 assert(extendedFlows.deleted, 'İş silme akışı başarısız.');
 
+const dataGuards = await evaluate(`(async () => {
+  const before = localStorage.getItem('islik-v1');
+  const invalidBackup = new File([JSON.stringify({
+    data: {
+      profile: { businessName: 'Geçersiz Yedek' },
+      jobs: [{ id: '1" onclick="alert(1)', title: 'Eksik kayıt' }]
+    }
+  })], 'invalid.json', { type: 'application/json' });
+  await restoreBackup(invalidBackup);
+  return {
+    backupRejected: localStorage.getItem('islik-v1') === before,
+    csvFormulaEscaped: escapeCSVCell('=1+1').startsWith('"\\'='),
+    csvPlainValueKept: escapeCSVCell('Normal').includes('Normal')
+  };
+})()`);
+assert(dataGuards.backupRejected, 'Geçersiz yedek mevcut verinin üzerine yazdı.');
+assert(dataGuards.csvFormulaEscaped && dataGuards.csvPlainValueKept, 'CSV hücre güvenliği başarısız.');
+
 const artifactDir = join(tmpdir(), 'islik-artifacts');
 await mkdir(artifactDir, { recursive: true });
+await evaluate(`document.querySelector('#toastRegion').replaceChildren()`);
 const desktop = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
 await writeFile(join(artifactDir, 'desktop.png'), Buffer.from(desktop.data, 'base64'));
 
@@ -228,14 +290,31 @@ assert(mobile.addButtonVisible, 'Mobil yeni iş düğmesi ekran dışında kalı
 const mobileShot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
 await writeFile(join(artifactDir, 'mobile.png'), Buffer.from(mobileShot.data, 'base64'));
 
+const serviceWorkerReady = await evaluate(`navigator.serviceWorker.ready.then(() => Boolean(navigator.serviceWorker.controller))`);
+assert(serviceWorkerReady, 'Service worker sayfayı kontrol etmiyor.');
+await cdp.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
+await cdp.send('Page.reload', { ignoreCache: false });
+await sleep(1500);
+const offline = await evaluate(`({
+  title: document.title,
+  dashboard: Boolean(document.querySelector('.dashboard-grid')),
+  online: navigator.onLine
+})`);
+assert(offline.title === 'İşlik - İşletme Asistanı' && offline.dashboard, 'Uygulama çevrimdışıyken açılamadı.');
+await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+
 console.log(JSON.stringify({
   title: initial.title,
   createdJobId: created.id,
   updatedStatus,
+  calendarFlow,
   extendedFlows,
+  dataGuards,
   mobile,
+  offline,
   screenshots: [join(artifactDir, 'desktop.png'), join(artifactDir, 'mobile.png')]
 }, null, 2));
 
 cdp.close();
 edge.kill();
+server?.kill();
