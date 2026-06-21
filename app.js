@@ -5,13 +5,34 @@ const VALID_PAYMENT_STATUSES = new Set(['pending', 'paid']);
 const MAX_BACKUP_SIZE = 5 * 1024 * 1024;
 
 const seedJobs = [
-  { id: 101, title: 'Kombi su basıncı arızası', customer: 'Ahmet Yılmaz', phone: '0532 410 24 18', date: todayISO(), time: '09:30', category: 'Teknik servis', amount: 1850, status: 'progress', paymentStatus: 'pending', paidAt: '', note: 'Basınç sürekli düşüyor. Genleşme tankı ve tesisat kaçağı kontrol edilecek.' },
-  { id: 102, title: 'Klima yıllık bakım', customer: 'Selin Kaya', phone: '0541 330 72 11', date: todayISO(), time: '11:00', category: 'Bakım', amount: 1250, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'İki iç ünite temizliği ve gaz kontrolü.' },
-  { id: 103, title: 'Bulaşık makinesi su almıyor', customer: 'Murat Demir', phone: '0507 221 08 42', date: todayISO(), time: '14:30', category: 'Teknik servis', amount: 950, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'Giriş valfi veya kart arızası olabilir.' },
-  { id: 104, title: 'Yeni petek montajı', customer: 'Derya Akın', phone: '0536 740 19 55', date: offsetISO(1), time: '10:00', category: 'Montaj', amount: 4200, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'Salon için 140 cm panel radyatör montajı.' },
-  { id: 105, title: 'Kombi anakart değişimi', customer: 'Emre Koç', phone: '0553 614 36 29', date: offsetISO(-1), time: '16:00', category: 'Teknik servis', amount: 3600, status: 'done', paymentStatus: 'paid', paidAt: offsetISO(-1), note: 'Parça değişti, ödeme alındı.' },
-  { id: 106, title: 'Tesisat kaçak tespiti', customer: 'Burcu Şen', phone: '0539 160 48 72', date: offsetISO(2), time: '13:30', category: 'Keşif', amount: 750, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'Alt kata nem geçişi var. Termal kamera ile kontrol.' },
-  { id: 107, title: 'Kazan genel bakımı', customer: 'Güneş Apartmanı', phone: '0216 338 82 90', date: offsetISO(-3), time: '12:00', category: 'Bakım', amount: 6800, status: 'done', paymentStatus: 'paid', paidAt: offsetISO(-3), note: 'Yıllık bakım tamamlandı.' }
+  {
+    id: 101,
+    title: 'Demo servis kaydi',
+    customer: 'Demo Musteri',
+    phone: '0500 000 00 00',
+    date: todayISO(),
+    time: '09:30',
+    category: 'Teknik servis',
+    amount: 1000,
+    status: 'progress',
+    paymentStatus: 'pending',
+    paidAt: '',
+    note: 'Bu kayit yalnizca demo amaclidir.'
+  },
+  {
+    id: 102,
+    title: 'Demo bakim randevusu',
+    customer: 'Ornek Isletme',
+    phone: '0500 000 00 01',
+    date: offsetISO(1),
+    time: '11:00',
+    category: 'Bakim',
+    amount: 1500,
+    status: 'waiting',
+    paymentStatus: 'pending',
+    paidAt: '',
+    note: 'Gercek kisi veya telefon bilgisi icermez.'
+  }
 ];
 
 const state = loadState();
