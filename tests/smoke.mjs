@@ -178,6 +178,19 @@ await evaluate(`(() => {
 const updatedStatus = await evaluate(`JSON.parse(localStorage.getItem('islik-v1')).jobs.find(job => job.title === 'Test cihaz kurulumu').status`);
 assert(updatedStatus === 'progress', 'İş durumu güncellenemedi.');
 
+const paymentFlow = await evaluate(`(() => {
+  document.querySelector('.main-nav [data-view="jobs"]').click();
+  const card = [...document.querySelectorAll('.job-card')].find(item => item.textContent.includes('Test cihaz kurulumu'));
+  card.click();
+  document.querySelector('#detailContent [data-payment="paid"]').click();
+  const saved = JSON.parse(localStorage.getItem('islik-v1')).jobs.find(job => job.title === 'Test cihaz kurulumu');
+  const detailText = document.querySelector('#detailContent').textContent;
+  document.querySelector('[data-close-detail]').click();
+  document.querySelector('.main-nav [data-view="dashboard"]').click();
+  return { paymentStatus: saved.paymentStatus, paidAt: saved.paidAt, detailUpdated: detailText.includes('Tahsil edildi') };
+})()`);
+assert(paymentFlow.paymentStatus === 'paid' && paymentFlow.paidAt && paymentFlow.detailUpdated, 'Ödeme tahsilatı kaydedilemedi.');
+
 const calendarFlow = await evaluate(`(() => {
   document.querySelector('.main-nav [data-view="calendar"]').click();
   const before = document.querySelector('.month-head h3').textContent;
@@ -196,7 +209,7 @@ const extendedFlows = await evaluate(`(() => {
   let card = [...document.querySelectorAll('.job-card')].find(item => item.textContent.includes('Test cihaz kurulumu'));
   card.click();
   const detail = document.querySelector('#detailContent');
-  const actionsReady = Boolean(detail.querySelector('[data-copy-quote]') && detail.querySelector('[data-whatsapp]') && detail.querySelector('[data-edit-job]') && detail.querySelector('[data-delete-job]'));
+  const actionsReady = Boolean(detail.querySelector('[data-payment]') && detail.querySelector('[data-copy-quote]') && detail.querySelector('[data-whatsapp]') && detail.querySelector('[data-edit-job]') && detail.querySelector('[data-delete-job]'));
   const quoteReady = detail.querySelector('.quote-preview')?.textContent.includes('2.400');
 
   detail.querySelector('[data-edit-job]').click();
@@ -230,18 +243,31 @@ const extendedFlows = await evaluate(`(() => {
     quoteReady,
     edited: saved.jobs.some(job => job.title === 'Test cihaz kurulumu güncellendi'),
     cancelled: saved.jobs.find(job => job.title === 'Test cihaz kurulumu güncellendi')?.status,
+    paymentStatus: saved.jobs.find(job => job.title === 'Test cihaz kurulumu güncellendi')?.paymentStatus,
     cancelledVisible,
     todayFilterActive,
     deleted: !saved.jobs.some(job => job.title === 'Silinecek test işi')
   };
 })()`);
 
-assert(extendedFlows.actionsReady, 'Teklif, WhatsApp, düzenleme veya silme aksiyonları eksik.');
+assert(extendedFlows.actionsReady, 'Ödeme, teklif, WhatsApp, düzenleme veya silme aksiyonları eksik.');
 assert(extendedFlows.quoteReady, 'Teklif önizlemesi oluşturulamadı.');
 assert(extendedFlows.edited, 'İş düzenleme akışı başarısız.');
 assert(extendedFlows.cancelled === 'cancelled' && extendedFlows.cancelledVisible, 'İptal edilen iş arşiv sütununda görünmüyor.');
+assert(extendedFlows.paymentStatus === 'paid', 'İptal edilen işin gerçek tahsilat kaydı korunmadı.');
 assert(extendedFlows.todayFilterActive, 'Bugün filtresi etkinleşmedi.');
 assert(extendedFlows.deleted, 'İş silme akışı başarısız.');
+
+const financePayment = await evaluate(`(() => {
+  const saved = JSON.parse(localStorage.getItem('islik-v1'));
+  const currentMonth = todayISO().slice(0, 7);
+  const expected = saved.jobs.filter(job => job.paymentStatus === 'paid' && job.paidAt.startsWith(currentMonth)).reduce((sum, job) => sum + Number(job.amount), 0);
+  document.querySelector('.main-nav [data-view="finance"]').click();
+  const displayed = document.querySelector('.metric-card .metric-value').textContent;
+  document.querySelector('.main-nav [data-view="dashboard"]').click();
+  return { expected: money(expected), displayed };
+})()`);
+assert(financePayment.displayed === financePayment.expected, 'Finans ekranı gerçek tahsilat toplamını göstermiyor.');
 
 const dataGuards = await evaluate(`(async () => {
   const before = localStorage.getItem('islik-v1');
@@ -255,11 +281,13 @@ const dataGuards = await evaluate(`(async () => {
   return {
     backupRejected: localStorage.getItem('islik-v1') === before,
     csvFormulaEscaped: escapeCSVCell('=1+1').startsWith('"\\'='),
-    csvPlainValueKept: escapeCSVCell('Normal').includes('Normal')
+    csvPlainValueKept: escapeCSVCell('Normal').includes('Normal'),
+    legacyDoneMigrated: normalizeJobs([{ id: 44, title: 'Eski iş', customer: 'Eski müşteri', date: '2026-01-02', time: '10:00', status: 'done', amount: 500 }])[0].paymentStatus === 'paid'
   };
 })()`);
 assert(dataGuards.backupRejected, 'Geçersiz yedek mevcut verinin üzerine yazdı.');
 assert(dataGuards.csvFormulaEscaped && dataGuards.csvPlainValueKept, 'CSV hücre güvenliği başarısız.');
+assert(dataGuards.legacyDoneMigrated, 'Eski tamamlanan işler ödeme modeline taşınamadı.');
 
 const artifactDir = join(tmpdir(), 'islik-artifacts');
 await mkdir(artifactDir, { recursive: true });
@@ -307,8 +335,10 @@ console.log(JSON.stringify({
   title: initial.title,
   createdJobId: created.id,
   updatedStatus,
+  paymentFlow,
   calendarFlow,
   extendedFlows,
+  financePayment,
   dataGuards,
   mobile,
   offline,

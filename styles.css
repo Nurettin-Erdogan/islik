@@ -303,11 +303,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .detail-box span, .detail-box strong { display: block; }
 .detail-box span { color: var(--muted); font-size: 8px; text-transform: uppercase; }
 .detail-box strong { margin-top: 5px; font-size: 11px; }
+.detail-box small { display: block; margin-top: 5px; color: var(--muted); font-size: 8px; }
+.payment-state.paid { background: var(--green-soft); color: var(--green); }
+.payment-state.pending { background: var(--amber-soft); color: var(--amber); }
 .detail-note { margin-top: 12px; padding: 15px; border: 1px solid var(--line); border-radius: 11px; color: var(--muted); font-size: 10px; line-height: 1.6; }
 .quote-preview { margin-top: 12px; padding: 15px; border-radius: 12px; background: var(--dark); color: #fff; }
 .quote-preview span { display: block; color: var(--lime); font-size: 8px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
 .quote-preview p { margin: 8px 0 0; color: #dce4df; font-size: 10px; line-height: 1.6; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+.payment-button { min-height: 42px; padding: 0 17px; border: 1px solid #19754e; border-radius: 11px; background: var(--green); color: #fff; font-size: 11px; font-weight: 800; }
+.payment-button:hover { background: #167448; }
 
 .onboarding-backdrop { background: rgba(8, 13, 10, .82); }
 .onboarding-modal { width: min(560px, 100%); padding: 34px; }

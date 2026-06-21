@@ -1,16 +1,17 @@
 const STORAGE_KEY = 'islik-v1';
-const APP_VERSION = 2;
+const APP_VERSION = 3;
 const VALID_JOB_STATUSES = new Set(['waiting', 'progress', 'done', 'cancelled']);
+const VALID_PAYMENT_STATUSES = new Set(['pending', 'paid']);
 const MAX_BACKUP_SIZE = 5 * 1024 * 1024;
 
 const seedJobs = [
-  { id: 101, title: 'Kombi su basıncı arızası', customer: 'Ahmet Yılmaz', phone: '0532 410 24 18', date: todayISO(), time: '09:30', category: 'Teknik servis', amount: 1850, status: 'progress', note: 'Basınç sürekli düşüyor. Genleşme tankı ve tesisat kaçağı kontrol edilecek.' },
-  { id: 102, title: 'Klima yıllık bakım', customer: 'Selin Kaya', phone: '0541 330 72 11', date: todayISO(), time: '11:00', category: 'Bakım', amount: 1250, status: 'waiting', note: 'İki iç ünite temizliği ve gaz kontrolü.' },
-  { id: 103, title: 'Bulaşık makinesi su almıyor', customer: 'Murat Demir', phone: '0507 221 08 42', date: todayISO(), time: '14:30', category: 'Teknik servis', amount: 950, status: 'waiting', note: 'Giriş valfi veya kart arızası olabilir.' },
-  { id: 104, title: 'Yeni petek montajı', customer: 'Derya Akın', phone: '0536 740 19 55', date: offsetISO(1), time: '10:00', category: 'Montaj', amount: 4200, status: 'waiting', note: 'Salon için 140 cm panel radyatör montajı.' },
-  { id: 105, title: 'Kombi anakart değişimi', customer: 'Emre Koç', phone: '0553 614 36 29', date: offsetISO(-1), time: '16:00', category: 'Teknik servis', amount: 3600, status: 'done', note: 'Parça değişti, ödeme alındı.' },
-  { id: 106, title: 'Tesisat kaçak tespiti', customer: 'Burcu Şen', phone: '0539 160 48 72', date: offsetISO(2), time: '13:30', category: 'Keşif', amount: 750, status: 'waiting', note: 'Alt kata nem geçişi var. Termal kamera ile kontrol.' },
-  { id: 107, title: 'Kazan genel bakımı', customer: 'Güneş Apartmanı', phone: '0216 338 82 90', date: offsetISO(-3), time: '12:00', category: 'Bakım', amount: 6800, status: 'done', note: 'Yıllık bakım tamamlandı.' }
+  { id: 101, title: 'Kombi su basıncı arızası', customer: 'Ahmet Yılmaz', phone: '0532 410 24 18', date: todayISO(), time: '09:30', category: 'Teknik servis', amount: 1850, status: 'progress', paymentStatus: 'pending', paidAt: '', note: 'Basınç sürekli düşüyor. Genleşme tankı ve tesisat kaçağı kontrol edilecek.' },
+  { id: 102, title: 'Klima yıllık bakım', customer: 'Selin Kaya', phone: '0541 330 72 11', date: todayISO(), time: '11:00', category: 'Bakım', amount: 1250, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'İki iç ünite temizliği ve gaz kontrolü.' },
+  { id: 103, title: 'Bulaşık makinesi su almıyor', customer: 'Murat Demir', phone: '0507 221 08 42', date: todayISO(), time: '14:30', category: 'Teknik servis', amount: 950, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'Giriş valfi veya kart arızası olabilir.' },
+  { id: 104, title: 'Yeni petek montajı', customer: 'Derya Akın', phone: '0536 740 19 55', date: offsetISO(1), time: '10:00', category: 'Montaj', amount: 4200, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'Salon için 140 cm panel radyatör montajı.' },
+  { id: 105, title: 'Kombi anakart değişimi', customer: 'Emre Koç', phone: '0553 614 36 29', date: offsetISO(-1), time: '16:00', category: 'Teknik servis', amount: 3600, status: 'done', paymentStatus: 'paid', paidAt: offsetISO(-1), note: 'Parça değişti, ödeme alındı.' },
+  { id: 106, title: 'Tesisat kaçak tespiti', customer: 'Burcu Şen', phone: '0539 160 48 72', date: offsetISO(2), time: '13:30', category: 'Keşif', amount: 750, status: 'waiting', paymentStatus: 'pending', paidAt: '', note: 'Alt kata nem geçişi var. Termal kamera ile kontrol.' },
+  { id: 107, title: 'Kazan genel bakımı', customer: 'Güneş Apartmanı', phone: '0216 338 82 90', date: offsetISO(-3), time: '12:00', category: 'Bakım', amount: 6800, status: 'done', paymentStatus: 'paid', paidAt: offsetISO(-3), note: 'Yıllık bakım tamamlandı.' }
 ];
 
 const state = loadState();
@@ -73,6 +74,11 @@ function normalizeJobs(jobs, { strict = false } = {}) {
     seenIds.add(id);
 
     const rawAmount = Number(job.amount);
+    const status = VALID_JOB_STATUSES.has(job.status) ? job.status : 'waiting';
+    const paymentStatus = VALID_PAYMENT_STATUSES.has(job.paymentStatus)
+      ? job.paymentStatus
+      : status === 'done' ? 'paid' : 'pending';
+    const rawPaidAt = cleanText(job.paidAt, 10);
     return {
       id,
       title,
@@ -82,7 +88,9 @@ function normalizeJobs(jobs, { strict = false } = {}) {
       time,
       category: cleanText(job.category, 60) || 'Diğer',
       amount: Number.isFinite(rawAmount) && rawAmount >= 0 ? Math.min(rawAmount, 1_000_000_000) : 0,
-      status: VALID_JOB_STATUSES.has(job.status) ? job.status : 'waiting',
+      status,
+      paymentStatus,
+      paidAt: paymentStatus === 'paid' ? (isValidDate(rawPaidAt) ? rawPaidAt : date) : '',
       note: cleanText(job.note, 1000)
     };
   }).filter(Boolean);
@@ -195,6 +203,10 @@ function statusLabel(status) {
   return { waiting: 'Bekliyor', progress: 'Devam ediyor', done: 'Tamamlandı', cancelled: 'İptal' }[status] || 'Bekliyor';
 }
 
+function paymentStatusLabel(status) {
+  return status === 'paid' ? 'Tahsil edildi' : 'Ödeme bekliyor';
+}
+
 function initials(name) {
   return cleanText(name, 100).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'İŞ';
 }
@@ -259,9 +271,10 @@ function renderDashboard() {
   const yesterdayJobs = state.jobs.filter(job => job.date === offsetISO(-1) && job.status !== 'cancelled');
   const currentMonth = monthKeyForOffset(0);
   const previousMonth = monthKeyForOffset(-1);
-  const completedRevenue = state.jobs.filter(job => job.status === 'done' && job.date.startsWith(currentMonth)).reduce((sum, job) => sum + Number(job.amount), 0);
-  const previousRevenue = state.jobs.filter(job => job.status === 'done' && job.date.startsWith(previousMonth)).reduce((sum, job) => sum + Number(job.amount), 0);
-  const pendingJobs = state.jobs.filter(job => ['waiting', 'progress'].includes(job.status));
+  const paidJobs = state.jobs.filter(job => job.paymentStatus === 'paid');
+  const completedRevenue = paidJobs.filter(job => job.paidAt.startsWith(currentMonth)).reduce((sum, job) => sum + Number(job.amount), 0);
+  const previousRevenue = paidJobs.filter(job => job.paidAt.startsWith(previousMonth)).reduce((sum, job) => sum + Number(job.amount), 0);
+  const pendingJobs = state.jobs.filter(job => job.status !== 'cancelled' && job.paymentStatus === 'pending');
   const pendingRevenue = pendingJobs.reduce((sum, job) => sum + Number(job.amount), 0);
   const customers = new Set(state.jobs.map(job => job.customer)).size;
   return `
@@ -269,8 +282,8 @@ function renderDashboard() {
       <div class="left-column">
         <div class="metric-grid">
           ${metricCard('Bugünkü işler', todayJobs.length, 'Düne göre', signedDifference(todayJobs.length, yesterdayJobs.length), '□', true)}
-          ${metricCard('Aylık kazanç', money(completedRevenue), 'Geçen aya göre', percentChange(completedRevenue, previousRevenue), '₺')}
-          ${metricCard('Bekleyen tutar', money(pendingRevenue), 'Açık iş sayısı', pendingJobs.length, '↗')}
+          ${metricCard('Aylık tahsilat', money(completedRevenue), 'Geçen aya göre', percentChange(completedRevenue, previousRevenue), '₺')}
+          ${metricCard('Bekleyen tahsilat', money(pendingRevenue), 'Ödenmemiş iş', pendingJobs.length, '↗')}
           ${metricCard('Toplam müşteri', customers, 'Bu ay yeni', `+${newCustomerCount(currentMonth)}`, '○')}
         </div>
 
@@ -341,7 +354,7 @@ function renderCustomers() {
   state.jobs.forEach(job => {
     const current = map.get(job.customer) || { name: job.customer, phone: job.phone, count: 0, total: 0, lastDate: job.date };
     current.count += 1;
-    current.total += job.status === 'done' ? Number(job.amount) : 0;
+    current.total += job.paymentStatus === 'paid' ? Number(job.amount) : 0;
     if (job.date > current.lastDate) current.lastDate = job.date;
     map.set(job.customer, current);
   });
@@ -372,22 +385,23 @@ function renderCalendar() {
 }
 
 function renderFinance() {
-  const completedJobs = state.jobs.filter(job => job.status === 'done');
-  const openJobs = state.jobs.filter(job => ['waiting', 'progress'].includes(job.status));
   const activeJobs = state.jobs.filter(job => job.status !== 'cancelled');
+  const paidJobs = state.jobs.filter(job => job.paymentStatus === 'paid');
+  const unpaidJobs = activeJobs.filter(job => job.paymentStatus === 'pending');
   const months = recentMonths(6).map(month => ({
     ...month,
-    value: completedJobs.filter(job => job.date.startsWith(month.key)).reduce((sum, job) => sum + Number(job.amount), 0)
+    value: paidJobs.filter(job => job.paidAt.startsWith(month.key)).reduce((sum, job) => sum + Number(job.amount), 0)
   }));
   const currentMonthPaid = months.at(-1)?.value || 0;
   const previousMonthPaid = months.at(-2)?.value || 0;
-  const allPaid = completedJobs.reduce((sum, job) => sum + Number(job.amount), 0);
-  const pending = openJobs.reduce((sum, job) => sum + Number(job.amount), 0);
+  const allPaid = paidJobs.reduce((sum, job) => sum + Number(job.amount), 0);
+  const pending = unpaidJobs.reduce((sum, job) => sum + Number(job.amount), 0);
+  const totalVolume = allPaid + pending;
   const average = activeJobs.length ? activeJobs.reduce((sum, job) => sum + Number(job.amount), 0) / activeJobs.length : 0;
-  const collectionRate = Math.round((allPaid / (allPaid + pending || 1)) * 100);
+  const collectionRate = Math.round((allPaid / (totalVolume || 1)) * 100);
   const max = Math.max(...months.map(month => month.value), 1);
-  const recentPayments = [...completedJobs].sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)).slice(0, 8);
-  return `<div class="section-toolbar"><h2>Finans özeti</h2><div class="toolbar-group"><button class="filter-button active">Son 6 ay</button><button class="secondary-button" id="exportButton">Dışa aktar</button></div></div><div class="metric-grid" style="margin-bottom:20px">${metricCard('Bu ay tahsil edilen', money(currentMonthPaid), 'Geçen aya göre', percentChange(currentMonthPaid, previousMonthPaid), '₺', true)}${metricCard('Bekleyen ödeme', money(pending), 'Açık iş sayısı', openJobs.length, '↗')}${metricCard('Ortalama iş', money(average), 'İptal hariç işler', activeJobs.length, '÷')}${metricCard('Tahsilat oranı', `%${collectionRate}`, 'Toplam iş hacmi', completedJobs.length, '○')}</div><div class="finance-layout"><section class="panel chart-panel"><div class="chart-head"><div><h3>Aylık kazanç</h3><p class="panel-title" style="color:var(--muted);font-size:9px">Tamamlanan işlerden elde edilen gerçek gelir</p></div><strong>${money(currentMonthPaid)}</strong></div><div class="bar-chart">${months.map((month,index) => `<div class="bar-wrap"><div class="bar ${index === months.length-1 ? 'current' : ''}" style="height:${month.value ? Math.max(12,(month.value/max)*100) : 3}%" title="${month.label}: ${money(month.value)}"></div><span>${month.label}</span></div>`).join('')}</div></section><section class="panel"><div class="panel-header"><div class="panel-title"><h2>Son hareketler</h2><p>Son 8 tamamlanan iş</p></div></div><div class="finance-list">${recentPayments.length ? recentPayments.map(job=>`<div class="finance-row"><span>${escapeHTML(job.customer)}<br><small style="color:var(--muted)">${shortDate(job.date)}</small></span><strong>+${money(job.amount)}</strong></div>`).join('') : `<div class="empty-state"><div><strong>Henüz tahsilat yok.</strong><span>Bir işi tamamladığında burada görünür.</span></div></div>`}</div></section></div>`;
+  const recentPayments = [...paidJobs].sort((a, b) => `${b.paidAt}${b.time}`.localeCompare(`${a.paidAt}${a.time}`)).slice(0, 8);
+  return `<div class="section-toolbar"><h2>Finans özeti</h2><div class="toolbar-group"><button class="filter-button active">Son 6 ay</button><button class="secondary-button" id="exportButton">Dışa aktar</button></div></div><div class="metric-grid" style="margin-bottom:20px">${metricCard('Bu ay tahsil edilen', money(currentMonthPaid), 'Geçen aya göre', percentChange(currentMonthPaid, previousMonthPaid), '₺', true)}${metricCard('Bekleyen tahsilat', money(pending), 'Ödenmemiş iş', unpaidJobs.length, '↗')}${metricCard('Ortalama iş', money(average), 'İptal hariç işler', activeJobs.length, '÷')}${metricCard('Tahsilat oranı', `%${collectionRate}`, 'Tahsil edilen iş', paidJobs.length, '○')}</div><div class="finance-layout"><section class="panel chart-panel"><div class="chart-head"><div><h3>Aylık tahsilat</h3><p class="panel-title" style="color:var(--muted);font-size:9px">Ödemesi alınan işlerden elde edilen gelir</p></div><strong>${money(currentMonthPaid)}</strong></div><div class="bar-chart">${months.map((month,index) => `<div class="bar-wrap"><div class="bar ${index === months.length-1 ? 'current' : ''}" style="height:${month.value ? Math.max(12,(month.value/max)*100) : 3}%" title="${month.label}: ${money(month.value)}"></div><span>${month.label}</span></div>`).join('')}</div></section><section class="panel"><div class="panel-header"><div class="panel-title"><h2>Son tahsilatlar</h2><p>Son 8 ödeme hareketi</p></div></div><div class="finance-list">${recentPayments.length ? recentPayments.map(job=>`<div class="finance-row"><span>${escapeHTML(job.customer)}<br><small style="color:var(--muted)">${shortDate(job.paidAt)}</small></span><strong>+${money(job.amount)}</strong></div>`).join('') : `<div class="empty-state"><div><strong>Henüz tahsilat yok.</strong><span>Bir ödemeyi tahsil edildi olarak işaretlediğinde burada görünür.</span></div></div>`}</div></section></div>`;
 }
 
 function renderWeekDays() {
@@ -474,7 +488,7 @@ function handleJobSubmit(event) {
     Object.assign(job, { ...data, amount: Number(data.amount) || 0 });
     showToast(`${job.title} güncellendi.`);
   } else {
-    const job = { ...data, id: Date.now(), amount: Number(data.amount) || 0, status: 'waiting' };
+    const job = { ...data, id: Date.now(), amount: Number(data.amount) || 0, status: 'waiting', paymentStatus: 'pending', paidAt: '' };
     state.jobs.unshift(job);
     showToast(`${job.customer} için yeni iş oluşturuldu.`);
   }
@@ -488,8 +502,10 @@ function openDetail(id) {
   const job = state.jobs.find(item => item.id === id);
   if (!job) return;
   document.querySelector('#detailModalTitle').textContent = job.title;
-  document.querySelector('#detailContent').innerHTML = `<div class="detail-grid"><div class="detail-box"><span>Müşteri</span><strong>${escapeHTML(job.customer)}</strong></div><div class="detail-box"><span>Telefon</span><strong>${escapeHTML(job.phone || '-')}</strong></div><div class="detail-box"><span>Randevu</span><strong>${longDate(job.date)} · ${job.time}</strong></div><div class="detail-box"><span>Tutar</span><strong>${money(job.amount)}</strong></div><div class="detail-box"><span>İş türü</span><strong>${escapeHTML(job.category)}</strong></div><div class="detail-box"><span>Durum</span><strong>${statusLabel(job.status)}</strong></div></div><div class="detail-note">${escapeHTML(job.note || 'Bu iş için not eklenmemiş.')}</div><div class="quote-preview"><span>Hazır teklif mesajı</span><p>${escapeHTML(buildQuoteMessage(job))}</p></div><div class="detail-actions"><button class="primary-button" data-status="progress">İşe başla</button><button class="secondary-button" data-status="done">Tamamlandı</button><button class="secondary-button" data-status="cancelled">İptal et</button><button class="secondary-button" data-copy-quote>Teklifi kopyala</button><button class="secondary-button" data-whatsapp>WhatsApp taslağı</button><button class="secondary-button" data-edit-job>Düzenle</button><button class="danger-button" data-delete-job>Sil</button></div>`;
+  const paymentAction = `<button class="payment-button" data-payment="${job.paymentStatus === 'paid' ? 'pending' : 'paid'}">${job.paymentStatus === 'paid' ? 'Tahsilatı geri al' : 'Ödeme alındı'}</button>`;
+  document.querySelector('#detailContent').innerHTML = `<div class="detail-grid"><div class="detail-box"><span>Müşteri</span><strong>${escapeHTML(job.customer)}</strong></div><div class="detail-box"><span>Telefon</span><strong>${escapeHTML(job.phone || '-')}</strong></div><div class="detail-box"><span>Randevu</span><strong>${longDate(job.date)} · ${job.time}</strong></div><div class="detail-box"><span>Tutar</span><strong>${money(job.amount)}</strong></div><div class="detail-box"><span>İş türü</span><strong>${escapeHTML(job.category)}</strong></div><div class="detail-box"><span>Durum</span><strong>${statusLabel(job.status)}</strong></div><div class="detail-box payment-state ${job.paymentStatus}"><span>Ödeme</span><strong>${paymentStatusLabel(job.paymentStatus)}</strong>${job.paidAt ? `<small>${longDate(job.paidAt)}</small>` : ''}</div></div><div class="detail-note">${escapeHTML(job.note || 'Bu iş için not eklenmemiş.')}</div><div class="quote-preview"><span>Hazır teklif mesajı</span><p>${escapeHTML(buildQuoteMessage(job))}</p></div><div class="detail-actions">${paymentAction}<button class="primary-button" data-status="progress">İşe başla</button><button class="secondary-button" data-status="done">Tamamlandı</button><button class="secondary-button" data-status="cancelled">İptal et</button><button class="secondary-button" data-copy-quote>Teklifi kopyala</button><button class="secondary-button" data-whatsapp>WhatsApp taslağı</button><button class="secondary-button" data-edit-job>Düzenle</button><button class="danger-button" data-delete-job>Sil</button></div>`;
   document.querySelectorAll('#detailContent [data-status]').forEach(button => button.addEventListener('click', () => updateJobStatus(id, button.dataset.status)));
+  document.querySelector('#detailContent [data-payment]')?.addEventListener('click', event => updatePaymentStatus(id, event.currentTarget.dataset.payment));
   document.querySelector('#detailContent [data-copy-quote]').addEventListener('click', () => copyQuote(job));
   document.querySelector('#detailContent [data-whatsapp]').addEventListener('click', () => openWhatsAppDraft(job));
   document.querySelector('#detailContent [data-edit-job]').addEventListener('click', () => {
@@ -509,6 +525,18 @@ function updateJobStatus(id, status) {
   updateHeader();
   render();
   showToast(`İş durumu “${statusLabel(status)}” olarak güncellendi.`);
+}
+
+function updatePaymentStatus(id, paymentStatus) {
+  const job = state.jobs.find(item => item.id === id);
+  if (!job || !VALID_PAYMENT_STATUSES.has(paymentStatus)) return;
+  job.paymentStatus = paymentStatus;
+  job.paidAt = paymentStatus === 'paid' ? todayISO() : '';
+  saveState();
+  updateHeader();
+  render();
+  openDetail(id);
+  showToast(paymentStatus === 'paid' ? 'Ödeme tahsil edildi.' : 'Tahsilat kaydı geri alındı.');
 }
 
 function buildQuoteMessage(job) {
@@ -642,7 +670,7 @@ function escapeCSVCell(value) {
 }
 
 function exportFinance() {
-  const rows = [['Müşteri','İş','Tarih','Durum','Tutar'], ...state.jobs.map(job => [job.customer, job.title, job.date, statusLabel(job.status), job.amount])];
+  const rows = [['Müşteri','İş','Tarih','İş durumu','Ödeme durumu','Tahsil tarihi','Tutar'], ...state.jobs.map(job => [job.customer, job.title, job.date, statusLabel(job.status), paymentStatusLabel(job.paymentStatus), job.paidAt || '', job.amount])];
   const csv = rows.map(row => row.map(escapeCSVCell).join(';')).join('\n');
   const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
   const link = document.createElement('a');

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'islik-cache-v8';
+const CACHE_NAME = 'islik-cache-v9';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.json', './assets/logo.svg'];
 
 self.addEventListener('install', event => {

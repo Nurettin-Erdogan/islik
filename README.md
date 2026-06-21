@@ -8,9 +8,10 @@ yönetmesi için geliştirilmiş çevrimdışı destekli bir web uygulamasıdır
 ## Neler Yapılabilir?
 
 - İş oluşturma, düzenleme, durum değiştirme, iptal etme ve silme
+- İş durumu ile ödeme durumunu ayrı takip etme
 - Bugünkü ve geciken işleri filtreleme
 - Müşteri geçmişini ve yaklaşan randevuları görüntüleme
-- Tamamlanan işlerden aylık tahsilat özeti çıkarma
+- Tahsil edilen ve bekleyen ödemelerden aylık finans özeti çıkarma
 - Teklif metnini kopyalama veya WhatsApp taslağı hazırlama
 - Finans kayıtlarını CSV olarak dışa aktarma
 - JSON yedeği indirme ve başka bir cihazda geri yükleme
